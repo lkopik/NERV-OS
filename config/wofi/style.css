@@ -1,0 +1,60 @@
+/**
+ * Улучшенная версия с:
+ * - Крупными читаемыми шрифтами
+ * - Яркими неоновыми цветами
+ * - Интересными эффектами выделения
+ */
+window {
+    background-color: #110822;           /* Глубокий фиолетово-чёрный */
+    border: 2px solid #6a3093;           /* Яркая фиолетовая рамка */
+    border-radius: 1px;                  /* Слегка скруглённые углы */
+    padding: 15px;
+    width: 34%;
+}
+
+#input {
+    font: bold 16px "JetBrains Mono", monospace;
+    color: #39ff14;                      /* Неоново-зелёный */
+    background-color: #1a0933;
+    border: 2px solid #8a2be2;           /* Фиолетовая неоновая рамка */
+    padding: 12px;
+    margin: 8px 5px;
+    caret-color: #ff073a;                /* Красный мигающий курсор */
+    box-shadow: 0 0 5px #8a2be2;         /* Свечение */
+}
+
+#inner-box {
+    margin: 5px 0;
+}
+
+#entry {
+    padding: 10px 15px;
+    margin: 3px 0;
+    background-color: transparent;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;           /* Плавные переходы */
+}
+
+#entry:selected {
+    background-color: #2a0d4a;
+    border-left: 3px solid #ff073a;      /* Ярко-красная полоса */
+    box-shadow: 0 0 10px rgba(139, 0, 255, 0.5);
+}
+
+#text {
+    font: 14px "JetBrains Mono", monospace;
+    color: #e0d6ff;                      /* Светло-фиолетовый */
+}
+
+#text:selected {
+    color: #39ff14;                      /* Ярко-зелёный при выборе */
+    text-shadow: 0 0 5px #39ff14;
+}
+
+#img {
+    margin-right: 12px;
+}
+
+#scroll {
+    margin: 0;
+}

@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Порог заряда батареи, при котором будет отправлено уведомление (в процентах)
+THRESHOLD_MAIN=30
+THRESHOLD_BACKUP=50
+THRESHOLD_CRITICAL=5
+
+# Уникальные идентификаторы для уведомлений
+NOTIFY_ID_MAIN=1000
+NOTIFY_ID_BACKUP=1001
+
+# Функция для отправки уведомления в стиле "Евангелиона"
+send_notification() {
+    local title="$1"
+    local id="$2"
+    local message="$3"
+    notify-send -u critical -r "$id" -i "battery" "$title" "$message"
+}
+
+# Функция для получения информации о батареях
+get_battery_info() {
+    acpi -b | awk -v battery="$1" '
+    {
+        if ($2 == "Battery" battery) {
+            level = gensub(/([0-9]+)%/, "\\1", "g", $4)
+            status = $3
+            print level, status
+        }
+    }'
+}
+
+# Основной цикл
+while true; do
+    # Получаем информацию о батареях
+    BATTERY1_INFO=($(get_battery_info 0))
+    BATTERY2_INFO=($(get_battery_info 1))
+
+    # Определяем основную и резервную батареи
+    if [[ ${BATTERY1_INFO[0]} -lt ${BATTERY2_INFO[0]} ]]; then
+        BATTERY_LEVEL_MAIN=${BATTERY1_INFO[0]}
+        BATTERY_STATUS_MAIN=${BATTERY1_INFO[1]}
+        BATTERY_LEVEL_BACKUP=${BATTERY2_INFO[0]}
+        BATTERY_STATUS_BACKUP=${BATTERY2_INFO[1]}
+    else
+        BATTERY_LEVEL_MAIN=${BATTERY2_INFO[0]}
+        BATTERY_STATUS_MAIN=${BATTERY2_INFO[1]}
+        BATTERY_LEVEL_BACKUP=${BATTERY1_INFO[0]}
+        BATTERY_STATUS_BACKUP=${BATTERY1_INFO[1]}
+    fi
+
+    # Если основная батарея разряжена до порога
+    if [[ $BATTERY_LEVEL_MAIN -le $THRESHOLD_MAIN ]]; then
+        send_notification "⚠️ ПРЕДУПРЕЖДЕНИЕ: Низкий уровень энергии" "$NOTIFY_ID_MAIN" \
+            "Уровень основной батареи: $BATTERY_LEVEL_MAIN%\n\n<b>Синхронизация с пилотом нарушена.</b> 🚨"
+    fi
+
+    # Если основная батарея разряжена до критического уровня
+    if [[ $BATTERY_LEVEL_MAIN -le $THRESHOLD_CRITICAL ]]; then
+        send_notification "🚨 КРИТИЧЕСКИЙ УРОВЕНЬ: Переход на резервный источник" "$NOTIFY_ID_MAIN" \
+            "Уровень основной батареи: $BATTERY_LEVEL_MAIN%\n\n<b>Активирован аварийный режим.</b> ⚡"
+    fi
+
+    # Если резервная батарея разряжена до порога
+    if [[ $BATTERY_LEVEL_BACKUP -le $THRESHOLD_BACKUP ]]; then
+        send_notification "🔴 АВАРИЯ: Резервный источник на пределе" "$NOTIFY_ID_BACKUP" \
+            "Уровень резервной батареи: $BATTERY_LEVEL_BACKUP%\n\n<b>ТРЕВОГА: Система близка к отключению.</b> 💥"
+    fi
+
+    # Выводим текущие уровни батарей для отладки
+    echo "Основная батарея: $BATTERY_LEVEL_MAIN% (${BATTERY_STATUS_MAIN})"
+    echo "Резервная батарея: $BATTERY_LEVEL_BACKUP% (${BATTERY_STATUS_BACKUP})"
+
+    # Проверяем каждые 300 секунд
+    sleep 300
+done

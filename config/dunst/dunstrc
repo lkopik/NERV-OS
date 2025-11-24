@@ -1,0 +1,40 @@
+[global]
+    monitor = 0
+    geometry = "300x5-10+50"
+    shrink = yes
+    transparency = 0              # Убедитесь, что прозрачность отключена
+    frame_color = "#FFFFFF"
+    separator_color = "frame"
+    idle_threshold = 120
+    font = "Monospace 10"
+    markup = full
+    format = "%s\n%b"
+    alignment = left
+    show_age_threshold = 60
+    word_wrap = yes
+    ignore_newline = no
+    stack_duplicates = yes
+    hide_duplicate_count = no
+    show_indicators = no
+    icon_position = left
+    max_icon_size = 80
+    corner_radius = 0             # Убедитесь, что углы не закруглены
+    force_xinerama = no
+    mouse_left_click = close_current
+    mouse_middle_click = close_all
+    mouse_right_click = close_all
+
+[urgency_low]
+    background = "#285577"        # Цвет фона для низкого уровня срочности
+    foreground = "#FFFFFF"        # Цвет текста
+    timeout = 5                   # Время отображения уведомления (в секундах)
+
+[urgency_normal]
+    background = "#285577"        # Цвет фона для нормального уровня срочности
+    foreground = "#FFFFFF"        # Цвет текста
+    timeout = 10                  # Время отображения уведомления (в секундах)
+
+[urgency_critical]
+    background = "#900000"        # Цвет фона для критического уровня срочности
+    foreground = "#FFFFFF"        # Цвет текста
+    timeout = 10                   # Уведомление не исчезнет автоматически
