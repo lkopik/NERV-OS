@@ -1,0 +1,303 @@
+#!/bin/bash
+
+# Универсальный скрипт для изменения названия дистрибутива
+set -e
+
+# Цвета для вывода
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Функции для вывода
+info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
+success() { echo -e "${GREEN}✅ $1${NC}"; }
+warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+error() { echo -e "${RED}❌ $1${NC}"; }
+
+# Переменные
+BACKUP_DIR="/tmp/distro_backup_$(date +%Y%m%d_%H%M%S)"
+CURRENT_DISTRO=""
+DETECTED_FILES=()
+
+# Определяем текущий дистрибутив
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        CURRENT_DISTRO=$(source /etc/os-release; echo $NAME)
+    elif [ -f /etc/lsb-release ]; then
+        CURRENT_DISTRO=$(source /etc/lsb-release; echo $DISTRIB_ID)
+    else
+        CURRENT_DISTRO="Unknown"
+    fi
+}
+
+# Находим все файлы, которые могут содержать информацию о дистрибутиве
+find_distro_files() {
+    info "Поиск файлов с информацией о дистрибутиве..."
+    
+    local files=(
+        "/etc/os-release"
+        "/etc/lsb-release" 
+        "/etc/issue"
+        "/etc/issue.net"
+        "/etc/debian_version"
+        "/etc/redhat-release"
+        "/etc/centos-release"
+        "/etc/fedora-release"
+        "/etc/SuSE-release"
+        "/etc/arch-release"
+        "/etc/alpine-release"
+    )
+    
+    for file in "${files[@]}"; do
+        if [ -f "$file" ]; then
+            DETECTED_FILES+=("$file")
+            info "Найден: $file"
+        fi
+    done
+    
+    if [ ${#DETECTED_FILES[@]} -eq 0 ]; then
+        error "Не найдены файлы с информацией о дистрибутиве!"
+        exit 1
+    fi
+}
+
+# Создаем бэкапы
+create_backups() {
+    info "Создание бэкапов..."
+    mkdir -p "$BACKUP_DIR"
+    
+    for file in "${DETECTED_FILES[@]}"; do
+        if [ -f "$file" ]; then
+            cp "$file" "$BACKUP_DIR/"
+            success "Бэкап создан: $file"
+        fi
+    done
+    
+    # Также бэкапим связанные файлы
+    local extra_files=(
+        "/etc/motd"
+        "/etc/dynamic-motd"
+    )
+    
+    for file in "${extra_files[@]}"; do
+        if [ -f "$file" ]; then
+            cp "$file" "$BACKUP_DIR/" 2>/dev/null || true
+        fi
+    done
+}
+
+# Функция отката
+rollback() {
+    error "Произошла ошибка! Откатываю изменения..."
+    if [ -d "$BACKUP_DIR" ]; then
+        for file in "${DETECTED_FILES[@]}"; do
+            local backup_file="$BACKUP_DIR/$(basename "$file")"
+            if [ -f "$backup_file" ]; then
+                cp "$backup_file" "$file"
+                info "Восстановлен: $file"
+            fi
+        done
+        success "Откат завершен"
+    else
+        error "Бэкапы не найдены, откат невозможен"
+    fi
+    exit 1
+}
+
+# Устанавливаем обработчик ошибок
+trap rollback ERR
+
+# Получаем новые настройки от пользователя
+get_user_input() {
+    echo
+    info "Текущий дистрибутив: $CURRENT_DISTRO"
+    echo
+    warning "ВНИМАНИЕ: Это изменит системные файлы. Используйте на свой страх и риск!"
+    echo
+    
+    read -p "Введите короткое название (NAME) [$CURRENT_DISTRO]: " NEW_NAME
+    NEW_NAME=${NEW_NAME:-"$CURRENT_DISTRO"}
+    
+    read -p "Введите полное название (PRETTY_NAME) [$NEW_NAME]: " NEW_PRETTY_NAME
+    NEW_PRETTY_NAME=${NEW_PRETTY_NAME:-"$NEW_NAME"}
+    
+    # Автоматически генерируем ID на основе NAME
+    NEW_ID=$(echo "$NEW_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
+    if [ -z "$NEW_ID" ]; then
+        NEW_ID="custom"
+    fi
+    
+    read -p "Введите ID (латинские буквы, без пробелов) [$NEW_ID]: " input_id
+    NEW_ID=${input_id:-$NEW_ID}
+    
+    # Получаем текущую версию если возможно
+    CURRENT_VERSION=""
+    if [ -f /etc/os-release ]; then
+        CURRENT_VERSION=$(source /etc/os-release; echo $VERSION_ID)
+    fi
+    CURRENT_VERSION=${CURRENT_VERSION:-"1.0"}
+    
+    read -p "Введите версию [$CURRENT_VERSION]: " NEW_VERSION
+    NEW_VERSION=${NEW_VERSION:-"$CURRENT_VERSION"}
+    
+    echo
+    info "Будут применены следующие настройки:"
+    echo "  NAME: $NEW_NAME"
+    echo "  PRETTY_NAME: $NEW_PRETTY_NAME" 
+    echo "  ID: $NEW_ID"
+    echo "  VERSION: $NEW_VERSION"
+    echo
+}
+
+# Подтверждение
+confirm_changes() {
+    read -p "Продолжить? (y/N): " confirm
+    if [[ ! $confirm =~ ^[Yy]$ ]]; then
+        info "Отмена."
+        exit 0
+    fi
+}
+
+# Основная функция изменения файлов
+apply_changes() {
+    info "Применение изменений..."
+    
+    # 1. /etc/os-release (главный файл)
+    if [ -f "/etc/os-release" ]; then
+        info "Обновляю /etc/os-release..."
+        
+        # Создаем временный файл
+        TEMP_FILE=$(mktemp)
+        
+        # Обрабатываем построчно, сохраняя структуру
+        while IFS= read -r line; do
+            case $line in
+                NAME=*)
+                    echo "NAME=\"$NEW_NAME\"" >> "$TEMP_FILE"
+                    ;;
+                PRETTY_NAME=*)
+                    echo "PRETTY_NAME=\"$NEW_PRETTY_NAME\"" >> "$TEMP_FILE"
+                    ;;
+                ID=*)
+                    echo "ID=$NEW_ID" >> "$TEMP_FILE"
+                    ;;
+                VERSION_ID=*)
+                    echo "VERSION_ID=\"$NEW_VERSION\"" >> "$TEMP_FILE"
+                    ;;
+                *)
+                    echo "$line" >> "$TEMP_FILE"
+                    ;;
+            esac
+        done < "/etc/os-release"
+        
+        # Если каких-то полей не было, добавляем их
+        if ! grep -q "^NAME=" "$TEMP_FILE"; then
+            echo "NAME=\"$NEW_NAME\"" >> "$TEMP_FILE"
+        fi
+        if ! grep -q "^PRETTY_NAME=" "$TEMP_FILE"; then
+            echo "PRETTY_NAME=\"$NEW_PRETTY_NAME\"" >> "$TEMP_FILE"
+        fi
+        if ! grep -q "^ID=" "$TEMP_FILE"; then
+            echo "ID=$NEW_ID" >> "$TEMP_FILE"
+        fi
+        
+        sudo cp "$TEMP_FILE" "/etc/os-release"
+        sudo chmod 644 "/etc/os-release"
+        rm -f "$TEMP_FILE"
+        
+        success "Обновлен /etc/os-release"
+    fi
+    
+    # 2. /etc/lsb-release
+    if [ -f "/etc/lsb-release" ]; then
+        info "Обновляю /etc/lsb-release..."
+        sudo tee "/etc/lsb-release" > /dev/null << EOF
+DISTRIB_ID=$NEW_NAME
+DISTRIB_RELEASE=$NEW_VERSION
+DISTRIB_CODENAME=$NEW_ID
+DISTRIB_DESCRIPTION="$NEW_PRETTY_NAME"
+EOF
+        success "Обновлен /etc/lsb-release"
+    fi
+    
+    # 3. Файлы issue
+    for issue_file in "/etc/issue" "/etc/issue.net"; do
+        if [ -f "$issue_file" ]; then
+            info "Обновляю $issue_file..."
+            echo "$NEW_PRETTY_NAME \\n \\l" | sudo tee "$issue_file" > /dev/null
+            success "Обновлен $issue_file"
+        fi
+    done
+    
+    # 4. Дистрибутив-специфичные файлы
+    if [ -f "/etc/redhat-release" ] || [ -f "/etc/centos-release" ] || [ -f "/etc/fedora-release" ]; then
+        info "Обновляю release-файл RedHat-based дистрибутивов..."
+        echo "$NEW_PRETTY_NAME" | sudo tee "/etc/redhat-release" > /dev/null 2>/dev/null || true
+        echo "$NEW_PRETTY_NAME" | sudo tee "/etc/centos-release" > /dev/null 2>/dev/null || true
+        echo "$NEW_PRETTY_NAME" | sudo tee "/etc/fedora-release" > /dev/null 2>/dev/null || true
+    fi
+    
+    if [ -f "/etc/debian_version" ]; then
+        info "Обновляю версию Debian..."
+        echo "$NEW_VERSION" | sudo tee "/etc/debian_version" > /dev/null
+    fi
+}
+
+# Проверка прав
+check_permissions() {
+    if [ "$EUID" -ne 0 ]; then
+        error "Этот скрипт требует прав root. Запустите с sudo:"
+        echo "  sudo $0"
+        exit 1
+    fi
+}
+
+# Функция проверки результатов
+verify_changes() {
+    echo
+    success "Изменения применены!"
+    echo
+    info "Проверка результатов:"
+    echo "====================="
+    
+    if [ -f "/etc/os-release" ]; then
+        echo "--- /etc/os-release ---"
+        grep -E "NAME|PRETTY_NAME|ID|VERSION" /etc/os-release | head -4
+    fi
+    
+    if command -v hostnamectl >/dev/null 2>&1; then
+        echo
+        echo "--- hostnamectl ---"
+        hostnamectl | grep -E "Operating System|Kernel"
+    fi
+    
+    if command -v lsb_release >/dev/null 2>&1; then
+        echo
+        echo "--- lsb_release ---"
+        lsb_release -a 2>/dev/null | grep -E "Description|Release" || true
+    fi
+    
+    echo
+    info "Бэкапы сохранены в: $BACKUP_DIR"
+    warning "Перезагрузите систему для полного применения изменений во всех программах"
+}
+
+# Главная функция
+main() {
+    echo "🔄 Универсальный скрипт изменения названия дистрибутива"
+    echo "======================================================"
+    
+    check_permissions
+    detect_distro
+    find_distro_files
+    get_user_input
+    confirm_changes
+    create_backups
+    apply_changes
+    verify_changes
+}
+
+# Запуск скрипта
+main "$@"
