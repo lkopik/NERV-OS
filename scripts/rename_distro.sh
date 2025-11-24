@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Универсальный скрипт для изменения названия дистрибутива
 set -e
 
 # Цвета для вывода
@@ -10,7 +9,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Функции для вывода
 info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 success() { echo -e "${GREEN}✅ $1${NC}"; }
 warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
@@ -32,7 +30,6 @@ detect_distro() {
     fi
 }
 
-# Находим все файлы, которые могут содержать информацию о дистрибутиве
 find_distro_files() {
     info "Поиск файлов с информацией о дистрибутиве..."
     
@@ -75,7 +72,6 @@ create_backups() {
         fi
     done
     
-    # Также бэкапим связанные файлы
     local extra_files=(
         "/etc/motd"
         "/etc/dynamic-motd"
@@ -106,7 +102,6 @@ rollback() {
     exit 1
 }
 
-# Устанавливаем обработчик ошибок
 trap rollback ERR
 
 # Получаем новые настройки от пользователя
@@ -123,7 +118,6 @@ get_user_input() {
     read -p "Введите полное название (PRETTY_NAME) [$NEW_NAME]: " NEW_PRETTY_NAME
     NEW_PRETTY_NAME=${NEW_PRETTY_NAME:-"$NEW_NAME"}
     
-    # Автоматически генерируем ID на основе NAME
     NEW_ID=$(echo "$NEW_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
     if [ -z "$NEW_ID" ]; then
         NEW_ID="custom"
@@ -171,7 +165,6 @@ apply_changes() {
         # Создаем временный файл
         TEMP_FILE=$(mktemp)
         
-        # Обрабатываем построчно, сохраняя структуру
         while IFS= read -r line; do
             case $line in
                 NAME=*)
@@ -192,7 +185,6 @@ apply_changes() {
             esac
         done < "/etc/os-release"
         
-        # Если каких-то полей не было, добавляем их
         if ! grep -q "^NAME=" "$TEMP_FILE"; then
             echo "NAME=\"$NEW_NAME\"" >> "$TEMP_FILE"
         fi
@@ -231,7 +223,6 @@ EOF
         fi
     done
     
-    # 4. Дистрибутив-специфичные файлы
     if [ -f "/etc/redhat-release" ] || [ -f "/etc/centos-release" ] || [ -f "/etc/fedora-release" ]; then
         info "Обновляю release-файл RedHat-based дистрибутивов..."
         echo "$NEW_PRETTY_NAME" | sudo tee "/etc/redhat-release" > /dev/null 2>/dev/null || true
@@ -245,7 +236,6 @@ EOF
     fi
 }
 
-# Проверка прав
 check_permissions() {
     if [ "$EUID" -ne 0 ]; then
         error "Этот скрипт требует прав root. Запустите с sudo:"
@@ -254,7 +244,6 @@ check_permissions() {
     fi
 }
 
-# Функция проверки результатов
 verify_changes() {
     echo
     success "Изменения применены!"
@@ -299,5 +288,4 @@ main() {
     verify_changes
 }
 
-# Запуск скрипта
 main "$@"
