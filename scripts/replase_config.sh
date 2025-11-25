@@ -4,7 +4,7 @@ backup_config() {
     local app=$1
     if [ -d "$HOME/.config/$app" ] && [ ! -L "$HOME/.config/$app" ]; then
         echo "Создаю бэкап $app..."
-        mv "$HOME/.config/$app" "$HOME/.config/${app}.backup.$(date +%Y%m%d)"
+        mv "$HOME/.config/$app" "$HOME/.config/${app}.old.$(date +%Y%m%d)"
     fi
 }
 
